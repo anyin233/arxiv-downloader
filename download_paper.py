@@ -4,10 +4,11 @@ import requests
 import logging
 import os
 
+import re
+
 # Configure logging
 logging.basicConfig(
   filename=LOG_PATH,
-  level=logging.WARNING,
   format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
@@ -53,7 +54,8 @@ def read_paper_list(path):
         with open(os.path.join(root, file), "r") as f:
           lines = f.readlines()
           for line in lines[1:]:
-            paper_id, title = line.strip().split(",")
+            paper_id = re.match(r'(\d+\.\d+)', line).group(1)
+            title = re.match(r'.*?"(.*?)"', line).group(1)
             yield paper_id, title
             
 def download_all_papers(path):
