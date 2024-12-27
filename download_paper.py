@@ -9,6 +9,8 @@ from tqdm import tqdm
 import re
 import time
 
+import argparse
+
 # Configure logging
 logging.basicConfig(
     filename=LOG_PATH, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -17,48 +19,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def save_pdf(paper_id, save_path):
+def save_paper(paper_id, DOWNLOAD_PATH):
     max_retries = MAX_RETRY
     retry_delay = 1  # initial delay in seconds
 
     for attempt in range(max_retries):
         try:
-            response = requests.get(f"{DOWNLOAD_API}/pdf/{paper_id}")
-            if response.status_code == 200:
-                with open(f"{save_path}/{paper_id}/{paper_id}.pdf", "wb") as f:
-                    f.write(response.content)
-                return  # success, exit the function
-            else:
-                logger.warning(
-                    f"Attempt {attempt + 1}/{max_retries}: Failed to download {paper_id}, status code: {response.status_code}"
-                )
-        except Exception as e:
-            logger.error(
-                f"Attempt {attempt + 1}/{max_retries}: Error downloading {paper_id}: {str(e)}"
-            )
-
-        if attempt < max_retries - 1:  # don't sleep on the last attempt
-            time.sleep(retry_delay)
-            retry_delay *= 2  # exponential backoff
-
-    logger.error(f"Failed to download {paper_id} after {max_retries} attempts")
-
-
-def save_tex(paper_id, save_path):
-    max_retries = MAX_RETRY
-    retry_delay = 1  # initial delay in seconds
-
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(f"{DOWNLOAD_API}/src/{paper_id}")
+            response = requests.get(f"{DOWNLOAD_API}/{paper_id}")
             if response.status_code == 200:
                 filename = response.headers.get("content-disposition", "").split(
                     "filename="
                 )[-1]
                 if not filename:
-                    filename = f"{paper_id}.tar.gz"
-                with open(f"{save_path}/{paper_id}/{filename}", "wb") as f:
+                    filename = f"{paper_id}.zip"
+                with open(f"{DOWNLOAD_PATH}/{paper_id}/{filename}", "wb") as f:
                     f.write(response.content)
+                # unzip the file
+                os.system(
+                    f"unzip {DOWNLOAD_PATH}/{paper_id}/{filename} -d {DOWNLOAD_PATH}/{paper_id}"
+                )
+                # remove the zip file
+                os.remove(f"{DOWNLOAD_PATH}/{paper_id}/{filename}")
                 return  # success, exit the function
             else:
                 logger.warning(
@@ -69,18 +50,15 @@ def save_tex(paper_id, save_path):
                 f"Attempt {attempt + 1}/{max_retries}: Error downloading {paper_id}: {str(e)}"
             )
 
-        if attempt < max_retries - 1:  # don't sleep on the last attempt
+        if attempt < max_retries - 1:  # don't sleep on the
             time.sleep(retry_delay)
-            retry_delay *= 2  # exponential backoff
-
-    logger.error(f"Failed to download {paper_id} after {max_retries} attempts")
+            retry_delay *= 2
 
 
-def download_paper(paper_id):
-    if not os.path.exists(os.path.join(DOWNLOAD_PATH, paper_id)):
-        os.makedirs(os.path.join(DOWNLOAD_PATH, paper_id))
-    save_pdf(paper_id, DOWNLOAD_PATH)
-    save_tex(paper_id, DOWNLOAD_PATH)
+def download_paper(paper_id, download_path):
+    if not os.path.exists(os.path.join(download_path, paper_id)):
+        os.makedirs(os.path.join(download_path, paper_id))
+    save_paper(paper_id, download_path)
 
 
 def read_paper_list(path):
@@ -96,11 +74,49 @@ def read_paper_list(path):
                         yield paper_id, title
 
 
-def download_all_papers(path):
+def download_all_papers(args):
+    path = args.list_path
+    download_path = args.download_path
     for paper_id, title in tqdm(read_paper_list(path)):
-        download_paper(paper_id)
+        download_paper(paper_id, download_path)
         logger.info(f"Downloaded {title}")
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Download papers from arXiv")
+    parser.add_argument(
+        "--list_path",
+        type=str,
+        default=LIST_PATH,
+        help="Path to the list of papers",
+    )
+    parser.add_argument(
+        "--download_path",
+        type=str,
+        default=DOWNLOAD_PATH,
+        help="Path to download the papers",
+    )
+    parser.add_argument(
+        "--log_path",
+        type=str,
+        default=LOG_PATH,
+        help="Path to the log file",
+    )
+    parser.add_argument(
+        "--max_retry",
+        type=int,
+        default=MAX_RETRY,
+        help="Maximum number of retries",
+    )
+    parser.add_argument(
+        "--download_api",
+        type=str,
+        default=DOWNLOAD_API,
+        help="API to download the papers",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    download_all_papers(LIST_PATH)
+    args = parse_args()
+    download_all_papers(args)
