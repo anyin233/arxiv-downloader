@@ -10,6 +10,7 @@ import re
 import time
 
 import argparse
+import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +26,13 @@ def save_paper(paper_id, DOWNLOAD_PATH):
 
     for attempt in range(max_retries):
         try:
+            if os.path.exists(f"{DOWNLOAD_PATH}/{paper_id}/{paper_id}.pdf"):
+                return # already downloaded
+            # clear all the file under the folder
+            for file in os.listdir(f"{DOWNLOAD_PATH}/{paper_id}"):
+                file_path = os.path.join(f"{DOWNLOAD_PATH}/{paper_id}", file)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
             response = requests.get(f"{DOWNLOAD_API}/{paper_id}")
             if response.status_code == 200:
                 filename = response.headers.get("content-disposition", "").split(
@@ -35,6 +43,7 @@ def save_paper(paper_id, DOWNLOAD_PATH):
                 with open(f"{DOWNLOAD_PATH}/{paper_id}/{filename}", "wb") as f:
                     f.write(response.content)
                 # unzip the file
+                # check if the destination folder contains {paper_id}.pdf
                 os.system(
                     f"unzip {DOWNLOAD_PATH}/{paper_id}/{filename} -d {DOWNLOAD_PATH}/{paper_id}"
                 )
